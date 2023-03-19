@@ -22,6 +22,7 @@ import Browser from '../utils/browser.js';
 import MSEEvents from './mse-events.js';
 import {SampleInfo, IDRSampleList} from './media-segment-info.js';
 import {IllegalStateException} from '../utils/exception.js';
+import { VideoReadyState } from './video-element.js';
 
 // Media Source Extensions controller
 class MSEController {
@@ -378,7 +379,7 @@ class MSEController {
 
     _updateMediaSourceDuration() {
         let sb = this._sourceBuffers;
-        if (this._mediaElement.readyState === 0 || this._mediaSource.readyState !== 'open') {
+        if (this._mediaElement.readyState === VideoReadyState.HAVE_NOTHING || this._mediaSource.readyState !== 'open') {
             return;
         }
         if ((sb.video && sb.video.updating) || (sb.audio && sb.audio.updating)) {

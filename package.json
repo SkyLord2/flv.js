@@ -17,7 +17,7 @@
   "scripts": {
     "build": "webpack --mode=production --progress",
     "build:debug": "webpack --mode=development --progress",
-    "dev": "webpack --mode=development --progress --watch",
+    "dev": "set NODE_OPTIONS=--openssl-legacy-provider && webpack --mode=development --progress --watch",
     "dtslint": "dtslint types"
   },
   "dependencies": {
