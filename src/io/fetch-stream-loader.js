@@ -184,9 +184,10 @@ class FetchStreamLoader extends BaseLoader {
         }
     }
 
-    _pump(reader) {  // ReadableStreamReader
+    _pump(reader) {  //* ReadableStreamReader
         return reader.read().then((result) => {
             if (result.done) {
+                // 流已经关闭了
                 // First check received length
                 if (this._contentLength !== null && this._receivedLength < this._contentLength) {
                     // Report Early-EOF
@@ -221,6 +222,9 @@ class FetchStreamLoader extends BaseLoader {
                 this._receivedLength += chunk.byteLength;
 
                 if (this._onDataArrival) {
+                    //! chunk: 收到的流数据中的一块数据
+                    //! byteStart: 此块chunk数据在整个流中的起始位置(偏移量)
+                    //! receivedLength: 当前已接收数据的总大小
                     this._onDataArrival(chunk, byteStart, this._receivedLength);
                 }
 

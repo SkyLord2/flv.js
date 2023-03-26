@@ -231,7 +231,12 @@ class TransmuxingController {
         }
         return idx;
     }
-
+    /**
+     * @description: Fetch取到一块数据后，交由FLVDemuxer解复用
+     * @param {*} data
+     * @param {*} byteStart
+     * @return {*}
+     */    
     _onInitChunkArrival(data, byteStart) {
         let probeData = null;
         let consumed = 0;

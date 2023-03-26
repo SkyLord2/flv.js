@@ -53,12 +53,12 @@ class IOController {
             this._stashInitialSize = config.stashInitialSize;
         }
 
-        this._stashUsed = 0;
-        this._stashSize = this._stashInitialSize;
-        this._bufferSize = 1024 * 1024 * 3;  // initial size: 3MB
-        this._stashBuffer = new ArrayBuffer(this._bufferSize);
-        this._stashByteStart = 0;
-        this._enableStash = true;
+        this._stashUsed = 0;                                        //! 缓存已使用大小
+        this._stashSize = this._stashInitialSize;                   //!
+        this._bufferSize = 1024 * 1024 * 3;                         //! 初始缓存大小:3MB
+        this._stashBuffer = new ArrayBuffer(this._bufferSize);      //! 创建缓存
+        this._stashByteStart = 0;                                   //! 缓存中偏移位置
+        this._enableStash = true;                                   //! 启用缓存
         if (config.enableStashBuffer === false) {
             this._enableStash = false;
         }
@@ -141,7 +141,12 @@ class IOController {
         this._extraData = data;
     }
 
-    // prototype: function onDataArrival(chunks: ArrayBuffer, byteStart: number): number
+    /**
+     * @description: 从流中读取到一块数据
+     * @param {ArrayBuffer} chunks
+     * @param {number} byteStart
+     * @return {*}
+     */    
     get onDataArrival() {
         return this._onDataArrival;
     }
@@ -358,22 +363,26 @@ class IOController {
 
         // TODO: replace with new url
     }
-
+    /**
+     * @description: 扩充缓存
+     * @param {number} expectedBytes
+     * @return {*}
+     */    
     _expandBuffer(expectedBytes) {
         let bufferNewSize = this._stashSize;
         while (bufferNewSize + 1024 * 1024 * 1 < expectedBytes) {
             bufferNewSize *= 2;
         }
 
-        bufferNewSize += 1024 * 1024 * 1;  // bufferSize = stashSize + 1MB
+        bufferNewSize += 1024 * 1024 * 1;                                               //! bufferSize = stashSize + 1MB
         if (bufferNewSize === this._bufferSize) {
             return;
         }
 
         let newBuffer = new ArrayBuffer(bufferNewSize);
 
-        if (this._stashUsed > 0) {  // copy existing data into new buffer
-            let stashOldArray = new Uint8Array(this._stashBuffer, 0, this._stashUsed);
+        if (this._stashUsed > 0) {                                                      // ! copy existing data into new buffer
+            let stashOldArray = new Uint8Array(this._stashBuffer, 0, this._stashUsed);  // ! 使用类型数组从 ArrayBuffer 中读取数组
             let stashNewArray = new Uint8Array(newBuffer, 0, bufferNewSize);
             stashNewArray.set(stashOldArray, 0);
         }
@@ -405,7 +414,11 @@ class IOController {
             }
         }
     }
-
+    /**
+     * @description: 动态调整缓存的大小
+     * @param {number} normalized
+     * @return {*}
+     */    
     _adjustStashSize(normalized) {
         let stashSizeKB = 0;
 
@@ -451,7 +464,13 @@ class IOController {
             this._fullRequestFlag = false;
         }
     }
-
+    /**
+     * @description: 读取到一块数据
+     * @param {ArrayBuffer} chunk 
+     * @param {number} byteStart 从这个流中已经接收数据的大小(偏移量)
+     * @param {number} receivedLength
+     * @return {*}
+     */    
     _onLoaderChunkArrival(chunk, byteStart, receivedLength) {
         if (!this._onDataArrival) {
             throw new IllegalStateException('IOController: No existing consumer (onDataArrival) callback!');
@@ -460,16 +479,16 @@ class IOController {
             return;
         }
         if (this._isEarlyEofReconnecting) {
-            // Auto-reconnect for EarlyEof succeed, notify to upper-layer by callback
+            //* Auto-reconnect for EarlyEof succeed, notify to upper-layer by callback
             this._isEarlyEofReconnecting = false;
             if (this._onRecoveredEarlyEof) {
                 this._onRecoveredEarlyEof();
             }
         }
-
+        //* 计算速度
         this._speedSampler.addBytes(chunk.byteLength);
 
-        // adjust stash buffer size according to network speed dynamically
+        //* 根据网络速度来动态调整缓存区的大小
         let KBps = this._speedSampler.lastSecondKBps;
         if (KBps !== 0) {
             let normalized = this._normalizeSpeed(KBps);
@@ -479,13 +498,14 @@ class IOController {
             }
         }
 
-        if (!this._enableStash) {  // disable stash
+        if (!this._enableStash) {  //! 未开启缓冲
             if (this._stashUsed === 0) {
-                // dispatch chunk directly to consumer;
-                // check ret value (consumed bytes) and stash unconsumed to stashBuffer
+                //! 如果是数据第一次到达，缓存未使用，直接派发数据
+                //! 将未消费的数据存入缓冲区
                 let consumed = this._dispatchChunks(chunk, byteStart);
                 if (consumed < chunk.byteLength) {  // unconsumed data remain.
                     let remain = chunk.byteLength - consumed;
+                    //* 剩余数据大于缓冲区，调整缓冲区的大小
                     if (remain > this._bufferSize) {
                         this._expandBuffer(remain);
                     }
@@ -495,12 +515,13 @@ class IOController {
                     this._stashByteStart = byteStart + consumed;
                 }
             } else {
-                // else: Merge chunk into stashBuffer, and dispatch stashBuffer to consumer.
+                //! 将到达的数据保存到缓冲区, 然后，将缓冲区的数据派发给消费者.
                 if (this._stashUsed + chunk.byteLength > this._bufferSize) {
                     this._expandBuffer(this._stashUsed + chunk.byteLength);
                 }
                 let stashArray = new Uint8Array(this._stashBuffer, 0, this._bufferSize);
                 stashArray.set(new Uint8Array(chunk), this._stashUsed);
+                //* 更新缓冲区的已用大小
                 this._stashUsed += chunk.byteLength;
                 let consumed = this._dispatchChunks(this._stashBuffer.slice(0, this._stashUsed), this._stashByteStart);
                 if (consumed < this._stashUsed && consumed > 0) {  // unconsumed data remain
@@ -510,23 +531,26 @@ class IOController {
                 this._stashUsed -= consumed;
                 this._stashByteStart += consumed;
             }
-        } else {  // enable stash
+        } else {  //! 开启了缓冲
             if (this._stashUsed === 0 && this._stashByteStart === 0) {  // seeked? or init chunk?
                 // This is the first chunk after seek action
                 this._stashByteStart = byteStart;
             }
+            //! 缓存数据小于 _stashSize时，直接将数据存入缓冲区
             if (this._stashUsed + chunk.byteLength <= this._stashSize) {
                 // just stash
                 let stashArray = new Uint8Array(this._stashBuffer, 0, this._stashSize);
                 stashArray.set(new Uint8Array(chunk), this._stashUsed);
                 this._stashUsed += chunk.byteLength;
-            } else {  // stashUsed + chunkSize > stashSize, size limit exceeded
+            } else {
+                //! stashUsed + chunkSize > stashSize, 缓冲的数据大小达到要求
                 let stashArray = new Uint8Array(this._stashBuffer, 0, this._bufferSize);
-                if (this._stashUsed > 0) {  // There're stash datas in buffer
-                    // dispatch the whole stashBuffer, and stash remain data
-                    // then append chunk to stashBuffer (stash)
+                if (this._stashUsed > 0) {  
+                    //! There're stash datas in buffer
                     let buffer = this._stashBuffer.slice(0, this._stashUsed);
+                    //! dispatch the whole stashBuffer, and stash remain data
                     let consumed = this._dispatchChunks(buffer, this._stashByteStart);
+                    //! then append chunk to stashBuffer (stash)
                     if (consumed < buffer.byteLength) {
                         if (consumed > 0) {
                             let remainArray = new Uint8Array(buffer, consumed);
@@ -544,8 +568,9 @@ class IOController {
                     }
                     stashArray.set(new Uint8Array(chunk), this._stashUsed);
                     this._stashUsed += chunk.byteLength;
-                } else {  // stash buffer empty, but chunkSize > stashSize (oh, holy shit)
-                    // dispatch chunk directly and stash remain data
+                } else {  
+                    //! stash buffer empty, but chunkSize > stashSize (oh, holy shit)
+                    //! dispatch chunk directly and stash remain data
                     let consumed = this._dispatchChunks(chunk, byteStart);
                     if (consumed < chunk.byteLength) {
                         let remain = chunk.byteLength - consumed;
