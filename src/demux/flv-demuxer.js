@@ -15,7 +15,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
+/*
+ ! FLV = FLVHeader + FLVBody
+ ! FLVHeader是固定的9个字节  
+*/
 import Log from '../utils/logger.js';
 import AMF from './amf-parser.js';
 import SPSParser from './sps-parser.js';
@@ -36,6 +39,12 @@ function Swap32(src) {
 }
 
 function ReadBig32(array, index) {
+    /*
+     * 0000_0000 0000 0000 0000 0000 0000 0000
+     * 0000 0000 0000_0000 0000 0000 0000 0000 
+     * 0000 0000 0000 0000 0000_0000 0000 0000
+     * 0000 0000 0000 0000 0000 0000 0000_0000
+    */
     return ((array[index] << 24)     |
             (array[index + 1] << 16) |
             (array[index + 2] << 8)  |
@@ -133,14 +142,23 @@ class FLVDemuxer {
     static probe(buffer) {
         let data = new Uint8Array(buffer);
         let mismatch = {match: false};
-
+        //! ASCII码中 0x46 F 0x4C L 0x56 V
+        //! 版本 0x01
         if (data[0] !== 0x46 || data[1] !== 0x4C || data[2] !== 0x56 || data[3] !== 0x01) {
             return mismatch;
         }
-
+        /*
+        ! 第五个字节高五位全为零，第六位是否存在音频，第八位是否存在视频
+        * 0000 0101
+        * 0000 0100
+        * 
+        * 0000 0101
+        * 0000 0001
+        * 
+        */
         let hasAudio = ((data[4] & 4) >>> 2) !== 0;
         let hasVideo = (data[4] & 1) !== 0;
-
+        //! 最后四个字节表示 FLVHeader的长度 固定是数字 9
         let offset = ReadBig32(data, 5);
 
         if (offset < 9) {

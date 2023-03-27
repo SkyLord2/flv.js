@@ -233,8 +233,8 @@ class TransmuxingController {
     }
     /**
      * @description: Fetch取到一块数据后，交由FLVDemuxer解复用
-     * @param {*} data
-     * @param {*} byteStart
+     * @param {*} data 取到的一块数据
+     * @param {*} byteStart 当前数据块在整个流中的起始位置
      * @return {*}
      */    
     _onInitChunkArrival(data, byteStart) {
@@ -248,7 +248,7 @@ class TransmuxingController {
 
             consumed = this._demuxer.parseChunks(data, byteStart);
         } else if ((probeData = FLVDemuxer.probe(data)).match) {
-            // Always create new FLVDemuxer
+            //! byteStart = 0, 检测是否为FLV格式，并创建FLV解复用器
             this._demuxer = new FLVDemuxer(probeData, this._config);
 
             if (!this._remuxer) {
@@ -282,6 +282,7 @@ class TransmuxingController {
 
             consumed = this._demuxer.parseChunks(data, byteStart);
         } else {
+            //! 不是FLV格式，不支持
             probeData = null;
             Log.e(this.TAG, 'Non-FLV, Unsupported media type!');
             Promise.resolve().then(() => {
